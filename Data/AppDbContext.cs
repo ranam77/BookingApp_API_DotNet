@@ -14,6 +14,8 @@ public class AppDbContext : DbContext
 
     public DbSet<Booking> Booking  => Set<Booking>();
 
+    public DbSet<User> users => Set<User>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -28,7 +30,7 @@ public class AppDbContext : DbContext
             .HasIndex(b => b.SlotId)
             .IsUnique()
             .HasFilter("\"Status\" = 0");
+     
 
-        
     }
 }

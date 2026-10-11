@@ -1,5 +1,6 @@
 ﻿using BookingApi.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
 
 namespace BookingApi.Data;
 
@@ -7,6 +8,16 @@ public static class DbSeeder
 {
     public static async Task SeedAsync(AppDbContext context)
     {
+
+        User testuser = new User();
+        testuser.username = "admin";
+        testuser.password = AuthController.GetMD5("admin");
+        if (!await context.users.AnyAsync())
+        {
+            context.users.Add(testuser);
+            await context.SaveChangesAsync();
+        }
+
         if (await context.Slots.AnyAsync())
             return;
 
@@ -47,5 +58,7 @@ public static class DbSeeder
             context.Slots.AddRange(slots);
             await context.SaveChangesAsync();
         }
+
+        
     }
 }

@@ -1,12 +1,14 @@
 ﻿using BookingApi.Data;
 using BookingApi.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Swashbuckle.AspNetCore.Annotations;
 namespace BookingApi.Controllers;
 
+[Authorize]
 [ApiController]
-[Route("slots")]
+[Route("api/slots")]
 public class SlotsController : ControllerBase
 {
     private readonly AppDbContext _context;

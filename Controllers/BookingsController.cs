@@ -1,14 +1,16 @@
 ﻿using BookingApi.Data;
 using BookingApi.DTOs;
 using BookingApi.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Swashbuckle.AspNetCore.Annotations;
 
 namespace BookingApi.Controllers;
 
+[Authorize]
 [ApiController]
-[Route("bookings")]
+[Route("api/bookings")]
 public class BookingsController : ControllerBase
 {
     private readonly AppDbContext _context;
