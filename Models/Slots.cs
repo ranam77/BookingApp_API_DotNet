@@ -4,7 +4,7 @@ namespace BookingApi.Models
 {
     public class Slots
     {
-        public Int32 ID { get; set; }
+        public Int32 Id { get; set; }
         public string Code { get; set; }
         public DateTime startsAt { get; set; }
         public DateTime endsAt { get; set; }

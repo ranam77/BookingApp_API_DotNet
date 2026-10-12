@@ -14,7 +14,7 @@ public class AppDbContext : DbContext
 
     public DbSet<Booking> Booking  => Set<Booking>();
 
-    public DbSet<User> users => Set<User>();
+    public DbSet<Project> projects => Set<Project>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

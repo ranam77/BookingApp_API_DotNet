@@ -29,10 +29,10 @@ public class SlotsController : ControllerBase
             var slots = await _context.Slots
                  .Where(s => !s.Booking.Any(b => b.Status == BookingStatus.Active))
                 .OrderBy(s => s.startsAt)
-                .ThenBy(s => s.ID)
+                .ThenBy(s => s.Id)
                 .Select(s => new
                 {
-                    s.ID,
+                    s.Id,
                     s.startsAt,
                     s.endsAt,
                     s.Code

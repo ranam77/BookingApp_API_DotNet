@@ -53,7 +53,7 @@ public class BookingsController : ControllerBase
 
         var booking = new Booking
         {
-            SlotId = slot.ID,
+            SlotId = slot.Id,
             CustomerName = request.CustomerName, 
             Status = BookingStatus.Active, customerEmail = request.CustomerEmail
         };

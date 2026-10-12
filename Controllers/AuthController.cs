@@ -27,7 +27,7 @@ public class AuthController : ControllerBase
         var key = _configuration["Jwt:Key"]!;
         var issuer = _configuration["Jwt:Issuer"]!;
         var audience = _configuration["Jwt:Audience"]!; 
-        var isExist = await _context.users.FirstOrDefaultAsync(u => u.username == request.username && u.password == GetMD5(request.password));
+        var isExist = await _context.projects.FirstOrDefaultAsync(u => u.clientusername == request.username && u.clientpassword == GetMD5(request.password));
         if (isExist == null)
         {
             return NotFound(new
