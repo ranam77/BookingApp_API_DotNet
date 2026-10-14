@@ -2,8 +2,7 @@
 {
     public class CreateBookingRequest
     {
-        public string CustomerName { get; set; }
-        public string CustomerEmail { get; set; }
-        public string slotCode { get; set; } 
+        public long SlotId { get; set; }
+        public long PatientId { get; set; }
     }
 }

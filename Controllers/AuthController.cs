@@ -1,9 +1,10 @@
 ﻿using BookingApi.Data;
 using BookingApi.DTOs;
-using BookingApi.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.Data;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -21,7 +22,7 @@ public class AuthController : ControllerBase
         _context = context;
     }
 
-    [HttpPost("token")]
+    [HttpPost("token/clients")]
     public async Task<IActionResult> CreateToken([FromBody] CreateTokenRequest request)
     {
         var key = _configuration["Jwt:Key"]!;
@@ -35,7 +36,7 @@ public class AuthController : ControllerBase
                 error = new
                 {
                     code = "USER_NOT_FOUND",
-                    message = "Enter Correct username and password."
+                    message = "Enter Correct username and password , user :admin password:admin (for testing purpose :) )."
                 }
             });
         }
@@ -62,10 +63,50 @@ public class AuthController : ControllerBase
             access_token = new JwtSecurityTokenHandler().WriteToken(token)
         });
     }
+    [HttpPost("token/patients")]
+    public async Task<IActionResult> CreateTokenPatient([FromBody] CreateTokenRequest request)
+    {
+        var key = _configuration["Jwt:Key"]!;
+        var issuer = _configuration["Jwt:Issuer"]!;
+        var audience = _configuration["Jwt:Audience"]!;
+        var passwordHash = GetMD5(request.password);
+        await using var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
+        await using var command = new SqlCommand("dbo.LoginPatients", connection);
+        command.CommandType = CommandType.StoredProcedure;
+        command.Parameters.Add("@Username", SqlDbType.NVarChar, 256).Value = request.username;
+        command.Parameters.Add("@PasswordHash", SqlDbType.VarChar, 32).Value = passwordHash;
+        await connection.OpenAsync();
+        var result = await command.ExecuteScalarAsync();
+        if (result == null || result == DBNull.Value)
+        {
+            return NotFound(new
+            {
+                error = new
+                {
+                    code = "USER_NOT_FOUND",
+                    message = "Enter Correct username and password."
+                }
+            });
+        }
+        var claims = new[] {new Claim(ClaimTypes.Name, request.username)};
+        var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
+        var credentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
+        var token = new JwtSecurityToken(
+            issuer: issuer,
+            audience: audience,
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(30),
+            signingCredentials: credentials);
+
+        return Ok(new
+        {
+            access_token = new JwtSecurityTokenHandler().WriteToken(token)
+        });
+
+    }
     public static string GetMD5(string input)
     {
         byte[] hash = MD5.HashData(Encoding.UTF8.GetBytes(input));
-
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }

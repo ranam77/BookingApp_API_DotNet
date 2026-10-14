@@ -1,133 +1,113 @@
-﻿using BookingApi.Data;
-using BookingApi.DTOs;
+﻿using BookingApi.DTOs;
 using BookingApi.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Swashbuckle.AspNetCore.Annotations;
+using System.Data;
 
 namespace BookingApi.Controllers;
 
 [Authorize]
 [ApiController]
 [Route("api/bookings")]
-public class BookingsController : ControllerBase
+public class BookingsController : Controller
 {
-    private readonly AppDbContext _context;
-
-    public BookingsController(AppDbContext context)
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<BookingsController> _logger;
+    public BookingsController(IConfiguration configuration , ILogger<BookingsController> logger)
     {
-        _context = context;
+        _configuration = configuration;
+        _logger = logger;
     }
 
-    [HttpPost("New")]
+    [HttpPost("new")]
     [SwaggerOperation(Summary = "Create New Booking")]
     public async Task<IActionResult> CreateBooking([FromBody] CreateBookingRequest request)
     {
-        request.CustomerName = request.CustomerName?.Trim() ?? ""; 
-
-        if (string.IsNullOrWhiteSpace(request.slotCode) || string.IsNullOrWhiteSpace(request.CustomerName))
-        {
-            return BadRequest(new
+        try {
+            if (request.SlotId == 0 || request.PatientId == 0)
             {
-                error = new
-                {
-                    code = "VALIDATION_ERROR",
-                    message = "Invalid booking data."
-                }
-            });
-        }
-
-        var slot = await _context.Slots.FirstOrDefaultAsync(s => s.Code == request.slotCode);
-        if (slot == null )
-        {
-            return NotFound(new
-            {
-                error = new
-                {
-                    code = "SLOT_NOT_FOUND",
-                    message = "The requested slot does not exist."
-                }
-            });
-        }
-
-        var booking = new Booking
-        {
-            SlotId = slot.Id,
-            CustomerName = request.CustomerName, 
-            Status = BookingStatus.Active, customerEmail = request.CustomerEmail
-        };
-
-        _context.Booking.Add(booking);
-
-        try
-        {
-            await _context.SaveChangesAsync();
-        }
-        catch (DbUpdateException)
-        {
-            return Conflict(new
-            {
-                error = new
-                {
-                    code = "SLOT_UNAVAILABLE",
-                    message = "This slot already has an active booking."
-                }
-            });
-        }
-
-        return StatusCode(201, new
-        {
-            booking = new BookingResponse
-            {
-                SlotCode = slot.Code,
-                CustomerName = booking.CustomerName,
-                CustomerEmail = booking.customerEmail,
-                Status = "active"
+                return BadRequest(new {error = new { code = "VALIDATION_ERROR",message = "Invalid booking data."}});
             }
-        });
+            var response = new BookingResponse();
+            var connectionString = _configuration.GetConnectionString("DefaultConnection");
+            await using var connection = new SqlConnection(connectionString);
+            await using var command = new SqlCommand("dbo.CreateBooking", connection);
+            command.CommandType = CommandType.StoredProcedure;
+            command.Parameters.Add("@SlotId", SqlDbType.BigInt).Value = request.SlotId;
+            command.Parameters.Add("@PatientId", SqlDbType.BigInt).Value = request.PatientId;
+            await connection.OpenAsync();
+            await using var reader = await command.ExecuteReaderAsync();
+            if (await reader.ReadAsync())
+            {
+                response.Success = reader.GetBoolean(reader.GetOrdinal("Success"));
+                int bookingIdOrdinal = reader.GetOrdinal("BookingId");
+                int bookingRefOrdinal = reader.GetOrdinal("BookingRef");
+                response.Id = reader.IsDBNull(bookingIdOrdinal) ? 0 : reader.GetInt64(bookingIdOrdinal);
+                response.BookingRef = reader.IsDBNull(bookingRefOrdinal) ? null : reader.GetGuid(bookingRefOrdinal);
+                response.Message = reader.GetString(reader.GetOrdinal("Message"));
+            }
+
+            if (!response.Success)
+                return Conflict(response);
+            return StatusCode(StatusCodes.Status201Created, response);
+        }
+        catch (SqlException ex)
+        {
+            _logger.LogError(ex, "Database error while CreateBooking ");
+            return StatusCode(500, new { success = false, message = "An unexpected error occurred." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error while CreateBooking ");
+            return StatusCode(500, new { success = false, message = "An unexpected error occurred." });
+        }
     }
-    [HttpDelete("CancelBooking/{bookingId:int}")]
-    [SwaggerOperation(Summary = "Cancel Existing Booking")]
-    public async Task<IActionResult> CancelBooking(Int32 bookingID)
+    
+    [HttpPost("{bookingRef:guid}/cancel")]
+    [SwaggerOperation(Summary = "Cancel Booking")]
+    public async Task<IActionResult> CancelBooking(Guid bookingRef)
+{
+    try
     {
-        var booking = await _context.Booking.FirstOrDefaultAsync(b => b.ID == bookingID);
-
-        if (booking == null)
+        await using var connection =new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
+        await using var command = new SqlCommand("dbo.CancelBooking", connection);
+        command.CommandType = CommandType.StoredProcedure;
+        command.Parameters.Add("@BookingRef", SqlDbType.UniqueIdentifier).Value = bookingRef;
+        await connection.OpenAsync();
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
         {
-            return NotFound(new
+            return StatusCode(500, new
             {
-                error = new
-                {
-                    code = "BOOKING_NOT_FOUND",
-                    message = "The requested booking does not exist."
-                }
+                success = false,
+                message = "The database returned an unexpected response."
             });
         }
-
-        if (booking.Status == BookingStatus.Cancelled)
+        bool success = Convert.ToBoolean(reader["Success"]);
+        string message = Convert.ToString(reader["Message"]) ?? "";
+        if (!success)
         {
-            return Ok(new
+            if (message.Contains("not found",StringComparison.OrdinalIgnoreCase))
             {
-                booking = new BookingResponse
-                {
-                    ID = booking.ID,
-                    CustomerName = booking.CustomerName ,
-                    Status = "cancelled"
-                }
-            });
-        }
-        booking.Status = BookingStatus.Cancelled;
-        await _context.SaveChangesAsync();
-
-        return Ok(new
-        {
-            booking = new BookingResponse
-            {
-                ID = booking.ID,
-                CustomerName = booking.CustomerName,
-                Status = "cancelled"
+                return NotFound(new{success = false,message});
             }
-        });
+            return Conflict(new{success = false,message});
+        }
+        return Ok(new {success = true,bookingRef,message});
     }
+    catch (SqlException ex)
+    {
+        _logger.LogError( ex, "Database error while cancelling booking {BookingRef}",bookingRef);
+        return StatusCode(500, new {success = false,message = "A database error occurred while cancelling the booking."});
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex,"Unexpected error while cancelling booking {BookingRef}",bookingRef);
+        return StatusCode(500, new{success = false,message = "An unexpected error occurred."});
+    }
+    }
+    
 }

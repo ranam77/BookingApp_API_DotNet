@@ -4,11 +4,10 @@ namespace BookingApi.Models
 {
     public class Slots
     {
-        public Int32 Id { get; set; }
+        public long Id { get; set; }
         public string Code { get; set; }
         public DateTime startsAt { get; set; }
         public DateTime endsAt { get; set; }
         public ICollection<Booking> Booking { get; set; } = new List<Booking>(); 
-
     }
 }

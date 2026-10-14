@@ -2,7 +2,7 @@
 {
     public class Project
     {
-        public Int32 ID { get; set; } 
+        public int Id { get; set; } 
 
         public string clientusername { get; set; } = string.Empty;
 
